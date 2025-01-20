@@ -34,14 +34,12 @@ siteinfo <- siteinfo %>%
 
 # load model parameters (valid ones)
 params_siml_gs_leuning <- tibble(
-  spinup = TRUE,
   spinupyears = 250,
   recycle = 1,
   firstyeartrend = 2009,
   nyeartrend = 1,
   steps_per_day = 24,
   do_U_shaped_mortality = TRUE,
-  update_annualLAImax = TRUE,
   do_closedN_run = TRUE,
   method_photosynth = "gs_leuning",
   method_mortality = "dbh"

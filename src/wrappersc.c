@@ -5,6 +5,7 @@
 #include <R_ext/Rdynload.h>
 
 // Fortran subroutine registration
+// See https://www.stat.berkeley.edu/~spector/s243/calling.pdf for more details
 
 /////////////////////////////////////////////////////////////
 // P-model
@@ -65,7 +66,7 @@ extern SEXP pmodel_f_C(
     ){
 
     // Number of time steps (same in forcing and output)
-    const int nt = INTEGER(n)[0] ;
+    const int nt = asInteger(n);
 
     // Specify output
     // 2nd agument to allocMatrix is number of rows, 3rd is number of columns
@@ -99,10 +100,6 @@ extern SEXP pmodel_f_C(
         REAL(output)
         );
 
-    // // Output as list
-    // SEXP out_full = PROTECT( allocVector(VECSXP, 1) );
-    // SET_VECTOR_ELT(out_full, 0, output);
-
     UNPROTECT(1);
 
     return output;
@@ -112,310 +109,114 @@ extern SEXP pmodel_f_C(
 // biomee
 /////////////////////////////////////////////////////////////
 void F77_NAME(biomee_f)(
-    int    *spinup, // LOGICAL type is not supported in the C interface (LTO)
-    int    *spinupyears,               
-    int    *recycle,              
-    int    *firstyeartrend,                  
-    int    *nyeartrend,
-    int    *steps_per_day,
-    int    *do_U_shaped_mortality, //LOGICAL
-    int    *update_annualLAImax, //LOGICAL
-    int    *do_closedN_run, //LOGICAL
-    int    *code_method_photosynth,
-    int    *code_method_mortality,                   
-    double *longitude,                  
-    double *latitude,                  
-    double *altitude,                  
-    int    *soiltype,                   
-    double *FLDCAP,                   
-    double *WILTPT,                   
-    double *K1,                   
-    double *K2,                   
-    double *K_nitrogen,                   
-    double *MLmixRatio,                   
-    double *etaN,
-    double *LMAmin,                                      
-    double *fsc_fine,                   
-    double *fsc_wood,                   
-    double *GR_factor,                   
-    double *l_fract,
-    double *retransN,
-    double *f_initialBSW,
-    double *f_N_add,
-    double *tf_base,
-    double *par_mort,
-    double *par_mort_under,
+    double *params_sim,
+    double *site_info,
+    double *params_tile,
     int    *n_params_species,
     double *params_species,
     int    *n_init_cohort,
     double *init_cohort,
-    double *init_fast_soil_C,
-    double *init_slow_soil_C,                   
-    double *init_Nmineral,                   
-    double *N_input,                   
-    int    *nt,                     
-    int    *nt_daily,                 
-    int    *nt_annual,                
-    int    *nt_annual_cohorts,                
+    double *init_soil,
+    int    *nt,
+    int    *nt_daily,
+    int    *nt_annual,
+    int    *nt_annual_cohorts,
     double *forcing,
+    int    *n_lu,
+    double *init_lu,
+    int    *n_lu_tr_years,
+    double *luc_forcing,
     double *output_daily_tile,
-    double *output_annual_tile,   
-    double *output_annual_cohorts_year,
-    double *output_annual_cohorts_cID,
-    double *output_annual_cohorts_PFT,
-    double *output_annual_cohorts_layer,
-    double *output_annual_cohorts_density,
-    double *output_annual_cohorts_flayer,
-    double *output_annual_cohorts_DBH,
-    double *output_annual_cohorts_dDBH,
-    double *output_annual_cohorts_height,
-    double *output_annual_cohorts_age,
-    double *output_annual_cohorts_BA,
-    double *output_annual_cohorts_dBA,
-    double *output_annual_cohorts_Acrown,
-    double *output_annual_cohorts_Aleaf,
-    double *output_annual_cohorts_nsc,
-    double *output_annual_cohorts_nsn,
-    double *output_annual_cohorts_seedC,
-    double *output_annual_cohorts_leafC,
-    double *output_annual_cohorts_rootC,
-    double *output_annual_cohorts_sapwC,
-    double *output_annual_cohorts_woodC,
-    double *output_annual_cohorts_treeG,
-    double *output_annual_cohorts_fseed,
-    double *output_annual_cohorts_fleaf,
-    double *output_annual_cohorts_froot,
-    double *output_annual_cohorts_fwood,
-    double *output_annual_cohorts_GPP,
-    double *output_annual_cohorts_NPP,
-    double *output_annual_cohorts_Rauto,
-    double *output_annual_cohorts_Nupt,
-    double *output_annual_cohorts_Nfix,
-    double *output_annual_cohorts_n_deadtrees,
-    double *output_annual_cohorts_c_deadtrees,
-    double *output_annual_cohorts_deathrate
-    );
+    double *output_annual_tile,
+    double *output_annual_cohorts,
+    double *output_annual_luluc
+  );
 
 // C wrapper function for biomee
 extern SEXP biomee_f_C(
-    SEXP spinup,                
-    SEXP spinupyears,
-    SEXP recycle,                 
-    SEXP firstyeartrend,                  
-    SEXP nyeartrend,
-    SEXP steps_per_day,
-    SEXP do_U_shaped_mortality,             
-    SEXP update_annualLAImax,                   
-    SEXP do_closedN_run,
-    SEXP code_method_photosynth,
-    SEXP code_method_mortality,                
-    SEXP longitude,                  
-    SEXP latitude,                  
-    SEXP altitude,                 
-    SEXP soiltype,
-    SEXP FLDCAP,
-    SEXP WILTPT,
-    SEXP K1,
-    SEXP K2,
-    SEXP K_nitrogen,
-    SEXP MLmixRatio,
-    SEXP etaN,
-    SEXP LMAmin,
-    SEXP fsc_fine,
-    SEXP fsc_wood,
-    SEXP GR_factor,
-    SEXP l_fract,
-    SEXP retransN,
-    SEXP f_initialBSW,
-    SEXP f_N_add, 
-    SEXP tf_base, 
-    SEXP par_mort,
-    SEXP par_mort_under,
-    SEXP n_params_species,
+    SEXP params_siml,
+    SEXP site_info,
+    SEXP params_tile,
     SEXP params_species,
-    SEXP n_init_cohort,
     SEXP init_cohort,
-    SEXP init_fast_soil_C,
-    SEXP init_slow_soil_C,
-    SEXP init_Nmineral,
-    SEXP N_input,
-    SEXP n,
+    SEXP init_soil,
+    SEXP forcing,
+    SEXP init_lu,
+    SEXP luc_forcing,
     SEXP n_daily,
-    SEXP n_annual,                
-    SEXP n_annual_cohorts,                
-    SEXP forcing
+    SEXP n_annual,
+    SEXP n_annual_trans
     ){
 
-    // // Number of time steps (same in forcing and output)
-    const int nt_daily = INTEGER(n_daily)[0];
-    const int nt_annual = INTEGER(n_annual)[0];
-    const int nt_annual_cohorts = INTEGER(n_annual_cohorts)[0];
+    // Number of time steps (same in forcing and output)
+    int nt_daily = asInteger(n_daily);
+    int nt_annual = asInteger(n_annual);
+    int nt_annual_trans = asInteger(n_annual_trans);
+    int n_init_cohort, n_params_species, nt, n_lu, n_lu_tr_years;
+    SEXP Rdim;
 
-    // // Specify output
-    SEXP output_daily_tile             = PROTECT( allocMatrix(REALSXP, nt_daily, 35) );   // 2nd agument to allocMatrix is number of rows, 3rd is number of columns.  xxx todo
-    SEXP output_annual_tile            = PROTECT( allocMatrix(REALSXP, nt_annual, 59) );   // 2nd agument to allocMatrix is number of rows, 3rd is number of columns.  xxx todo
-    SEXP output_annual_cohorts_year    = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_cID     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_PFT     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_layer   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_density = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_flayer  = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_DBH     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_dDBH    = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_height  = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_age     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_BA      = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_dBA     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_Acrown  = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_Aleaf   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_nsc     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_nsn     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_seedC   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_leafC   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_rootC   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_sapwC   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_woodC   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_treeG   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_fseed   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_fleaf   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_froot   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_fwood   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_GPP     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_NPP     = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_Rauto   = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_Nupt    = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_Nfix    = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_n_deadtrees  = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_c_deadtrees  = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    SEXP output_annual_cohorts_deathrate  = PROTECT( allocMatrix(REALSXP, nt_annual_cohorts, 50) );
-    
+    // Extracting array dimensions (they need to be passed to fortran separately)
+    Rdim = getAttrib(params_species,R_DimSymbol);
+    n_params_species = asInteger(Rdim);
+    Rdim = getAttrib(init_cohort,R_DimSymbol);
+    n_init_cohort = asInteger(Rdim);
+    Rdim = getAttrib(forcing,R_DimSymbol);
+    nt = asInteger(Rdim);
+    Rdim = getAttrib(init_lu,R_DimSymbol);
+    n_lu = asInteger(Rdim);
+    Rdim = getAttrib(luc_forcing,R_DimSymbol);
+    n_lu_tr_years = INTEGER(Rdim)[2];
+
+
+    // Output list
+    SEXP out_list = PROTECT( allocVector(VECSXP, 4) );
+
+    /******* Output sub-lists *******/
+    SEXP output_daily_tile             = PROTECT( alloc3DArray(REALSXP, nt_daily, 35, n_lu) );
+    SEXP output_annual_tile            = PROTECT( alloc3DArray(REALSXP, nt_annual, 59, n_lu) );
+
+    // Dimensions
+    int pDims[4] = {50, nt_annual_trans, 35, n_lu};
+    SEXP dims = allocVector(INTSXP, 4);
+    // INTEGER(dims) is a int* which we initialise with pDims
+    memcpy(INTEGER(dims), pDims, 4 * sizeof(int));
+    // Allocate 4D array
+    SEXP output_annual_cohort_tile = PROTECT(allocArray(REALSXP, dims));
+
+    SEXP output_annual_luluc           = PROTECT( alloc3DArray(REALSXP, nt_annual, 2, n_lu) );
+    /****************/
+
     // Fortran subroutine call
     F77_CALL(biomee_f)(
-        INTEGER(spinup),
-        INTEGER(spinupyears),                  
-        INTEGER(recycle),                 
-        INTEGER(firstyeartrend),                  
-        INTEGER(nyeartrend),
-        INTEGER(steps_per_day),
-        INTEGER(do_U_shaped_mortality),
-        INTEGER(update_annualLAImax),
-        INTEGER(do_closedN_run),
-        INTEGER(code_method_photosynth),
-        INTEGER(code_method_mortality),              
-        REAL(longitude),                  
-        REAL(latitude),                  
-        REAL(altitude),                  
-        INTEGER(soiltype),                   
-        REAL(FLDCAP),                   
-        REAL(WILTPT),                   
-        REAL(K1),                   
-        REAL(K2),                   
-        REAL(K_nitrogen),                   
-        REAL(MLmixRatio),                   
-        REAL(etaN),                   
-        REAL(LMAmin),                   
-        REAL(fsc_fine),                   
-        REAL(fsc_wood),                   
-        REAL(GR_factor),  
-        REAL(l_fract),  
-        REAL(retransN),  
-        REAL(f_initialBSW),  
-        REAL(f_N_add),  
-        REAL(tf_base),  
-        REAL(par_mort),  
-        REAL(par_mort_under),  
-        INTEGER(n_params_species),
+        REAL(params_siml),
+        REAL(site_info),
+        REAL(params_tile),
+        &n_params_species,
         REAL(params_species),
-        INTEGER(n_init_cohort),
+        &n_init_cohort,
         REAL(init_cohort),
-        REAL(init_fast_soil_C),
-        REAL(init_slow_soil_C),                   
-        REAL(init_Nmineral),                   
-        REAL(N_input),                  
-        INTEGER(n),                    
-        INTEGER(n_daily),                 
-        INTEGER(n_annual),                
-        INTEGER(n_annual_cohorts),                
+        REAL(init_soil),
+        &nt,
+        &nt_daily,
+        &nt_annual,
+        &nt_annual_trans,
         REAL(forcing),
+        &n_lu,
+        REAL(init_lu),
+        &n_lu_tr_years,
+        REAL(luc_forcing),
         REAL(output_daily_tile),
-        REAL(output_annual_tile),  
-        REAL(output_annual_cohorts_year),
-        REAL(output_annual_cohorts_cID),
-        REAL(output_annual_cohorts_PFT),
-        REAL(output_annual_cohorts_layer),
-        REAL(output_annual_cohorts_density),
-        REAL(output_annual_cohorts_flayer),
-        REAL(output_annual_cohorts_DBH),
-        REAL(output_annual_cohorts_dDBH),
-        REAL(output_annual_cohorts_height),
-        REAL(output_annual_cohorts_age),
-        REAL(output_annual_cohorts_BA),
-        REAL(output_annual_cohorts_dBA),
-        REAL(output_annual_cohorts_Acrown),
-        REAL(output_annual_cohorts_Aleaf),
-        REAL(output_annual_cohorts_nsc),
-        REAL(output_annual_cohorts_nsn),
-        REAL(output_annual_cohorts_seedC),
-        REAL(output_annual_cohorts_leafC),
-        REAL(output_annual_cohorts_rootC),
-        REAL(output_annual_cohorts_sapwC),
-        REAL(output_annual_cohorts_woodC),
-        REAL(output_annual_cohorts_treeG),
-        REAL(output_annual_cohorts_fseed),
-        REAL(output_annual_cohorts_fleaf),
-        REAL(output_annual_cohorts_froot),
-        REAL(output_annual_cohorts_fwood),
-        REAL(output_annual_cohorts_GPP),
-        REAL(output_annual_cohorts_NPP),
-        REAL(output_annual_cohorts_Rauto),
-        REAL(output_annual_cohorts_Nupt),
-        REAL(output_annual_cohorts_Nfix),
-        REAL(output_annual_cohorts_n_deadtrees),
-        REAL(output_annual_cohorts_c_deadtrees),
-        REAL(output_annual_cohorts_deathrate)
+        REAL(output_annual_tile),
+        REAL(output_annual_cohort_tile),
+        REAL(output_annual_luluc)
         );
 
-    // // Output as list
-    SEXP out_list = PROTECT( allocVector(VECSXP, 36) );  // maybe try  STRSXP instead of VECSXP
-
-    SET_VECTOR_ELT(out_list, 0,  output_daily_tile);
+    SET_VECTOR_ELT(out_list, 0, output_daily_tile);
     SET_VECTOR_ELT(out_list, 1, output_annual_tile);
-    SET_VECTOR_ELT(out_list, 2, output_annual_cohorts_year);
-    SET_VECTOR_ELT(out_list, 3, output_annual_cohorts_cID);
-    SET_VECTOR_ELT(out_list, 4, output_annual_cohorts_PFT);
-    SET_VECTOR_ELT(out_list, 5, output_annual_cohorts_layer);
-    SET_VECTOR_ELT(out_list, 6, output_annual_cohorts_density);
-    SET_VECTOR_ELT(out_list, 7, output_annual_cohorts_flayer);
-    SET_VECTOR_ELT(out_list, 8, output_annual_cohorts_DBH);
-    SET_VECTOR_ELT(out_list, 9, output_annual_cohorts_dDBH);
-    SET_VECTOR_ELT(out_list, 10, output_annual_cohorts_height);
-    SET_VECTOR_ELT(out_list, 11, output_annual_cohorts_age);
-    SET_VECTOR_ELT(out_list, 12, output_annual_cohorts_BA);
-    SET_VECTOR_ELT(out_list, 13, output_annual_cohorts_dBA);
-    SET_VECTOR_ELT(out_list, 14, output_annual_cohorts_Acrown);
-    SET_VECTOR_ELT(out_list, 15, output_annual_cohorts_Aleaf);
-    SET_VECTOR_ELT(out_list, 16, output_annual_cohorts_nsc);
-    SET_VECTOR_ELT(out_list, 17, output_annual_cohorts_nsn);
-    SET_VECTOR_ELT(out_list, 18, output_annual_cohorts_seedC);
-    SET_VECTOR_ELT(out_list, 19, output_annual_cohorts_leafC);
-    SET_VECTOR_ELT(out_list, 20, output_annual_cohorts_rootC);
-    SET_VECTOR_ELT(out_list, 21, output_annual_cohorts_sapwC);
-    SET_VECTOR_ELT(out_list, 22, output_annual_cohorts_woodC);
-    SET_VECTOR_ELT(out_list, 23, output_annual_cohorts_treeG);
-    SET_VECTOR_ELT(out_list, 24, output_annual_cohorts_fseed);
-    SET_VECTOR_ELT(out_list, 25, output_annual_cohorts_fleaf);
-    SET_VECTOR_ELT(out_list, 26, output_annual_cohorts_froot);
-    SET_VECTOR_ELT(out_list, 27, output_annual_cohorts_fwood);
-    SET_VECTOR_ELT(out_list, 28, output_annual_cohorts_GPP);
-    SET_VECTOR_ELT(out_list, 29, output_annual_cohorts_NPP);
-    SET_VECTOR_ELT(out_list, 30, output_annual_cohorts_Rauto);
-    SET_VECTOR_ELT(out_list, 31, output_annual_cohorts_Nupt);
-    SET_VECTOR_ELT(out_list, 32, output_annual_cohorts_Nfix);
-    SET_VECTOR_ELT(out_list, 33, output_annual_cohorts_n_deadtrees);
-    SET_VECTOR_ELT(out_list, 34, output_annual_cohorts_c_deadtrees);
-    SET_VECTOR_ELT(out_list, 35, output_annual_cohorts_deathrate);
-    
-    UNPROTECT(37);
+    SET_VECTOR_ELT(out_list, 2, output_annual_cohort_tile);
+    SET_VECTOR_ELT(out_list, 3, output_annual_luluc);
+
+    UNPROTECT(5);
 
     return out_list;
 }
@@ -425,8 +226,8 @@ extern SEXP biomee_f_C(
 /////////////////////////////////////////////////////////////
 static const R_CallMethodDef CallEntries[] = {
   {"pmodel_f_C",   (DL_FUNC) &pmodel_f_C,   23},  // Specify number of arguments to C wrapper as the last number here
-  {"biomee_f_C",   (DL_FUNC) &biomee_f_C,   46},  // Number of arguments of the C wrapper function for biomee (the SEXP variables, not the output)
-  {NULL,         NULL,                0}
+  {"biomee_f_C",   (DL_FUNC) &biomee_f_C,   12},  // Number of arguments of the C wrapper function for biomee (the SEXP variables, not the output)
+  { NULL,          NULL,                    0 }
 };
 
 void R_init_rsofun(DllInfo *dll)

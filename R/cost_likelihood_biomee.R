@@ -50,7 +50,7 @@ cost_likelihood_biomee <- function(
 ){
   
   # predefine variables for CRAN check compliance
-  GPP <- LAI <- Density12 <- plantC <- error <- NULL
+  GPP <- LAI <- Density12 <- plantC <- NULL
   
   # Add changed model parameters to drivers, overwriting where necessary.
   drivers$params_species[[1]]$phiRL[]  <- par[1]
@@ -65,21 +65,9 @@ cost_likelihood_biomee <- function(
     parallel = FALSE
   )
   
-  # did we spin up
-  spin_up <- drivers$params_siml[[1]]$spinup
-  
-  # drop spinup years if activated
-  # see below
-  if (spin_up){
-    spin_up_years <- drivers$params_siml[[1]]$spinupyears + 1
-  } else {
-    spin_up_years <- 0
-  }
-  
-  # Aggregate variables from the model df taking the last 500 yrs
-  # if spun up
+  # Aggregate variables from the model df taking the last 50 yrs (up to)
   df <- df$data[[1]]$output_annual_tile |>
-    utils::tail(500 - spin_up_years) |>
+    utils::tail(50) |>
     dplyr::summarise(
       GPP = mean(GPP),
       LAI = stats::quantile(LAI, probs = 0.95, na.rm=TRUE),

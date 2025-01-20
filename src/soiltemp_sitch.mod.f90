@@ -125,7 +125,7 @@ contains
   function air_to_soil_temp(thetaS, dtemp, doy, init, finalize) result (soil_temp)
     !/////////////////////////////////////////////////////////////////////////
     ! Calculates soil temperature (deg C) based on air temperature (deg C).
-    ! Convnience wrapper
+    ! Convenience wrapper
     !-------------------------------------------------------------------------
     use md_tile_pmodel, only: soil_type, initglobal_soil
 

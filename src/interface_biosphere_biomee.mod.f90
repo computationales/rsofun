@@ -6,13 +6,12 @@ module md_interface_biomee
   use md_forcing_biomee, only: climate_type
   use md_params_siml_biomee, only: paramstype_siml_biomee
   use md_params_core
-  use md_grid, only: gridtype
 
   implicit none
 
   private
-  public  myinterface, interfacetype_biosphere, outtype_hourly_tile, &
-    outtype_annual_cohorts, outtype_daily_cohorts, outtype_daily_tile, outtype_annual_tile, spec_data_type
+  public  myinterface, interfacetype_biosphere, &
+    outtype_annual_cohorts, outtype_daily_tile, outtype_annual_tile, spec_data_type
 
   integer, public, parameter :: MAX_LEVELS = 3  ! Soil layers, for soil water dynamics
 
@@ -111,7 +110,7 @@ module md_interface_biomee
     real    :: mortrate_d_u                       ! yearly mortality rate in understory
 
     !===== Population level variables
-    real    :: LAImax, underLAImax                ! max. LAI - Mutated at runtime!!
+    real    :: LAImax, underLAImax                ! max. LAI - Overridden
     real    :: LAI_light                          ! light controlled maximum LAI
     real    :: internal_gap_frac                  ! fraction of internal gaps in the canopy
 
@@ -137,49 +136,32 @@ module md_interface_biomee
     real :: N_input
   end type inittype_soil
 
+  type site_info_type
+    real :: lon
+    real :: lat
+    real :: elv ! elevation
+  endtype site_info_type
+
   type interfacetype_biosphere
-    integer                                               :: year
-    real, dimension(:), allocatable                       :: pco2
-    type(gridtype)                                        :: grid
     type(climate_type), dimension(:), allocatable         :: climate
-    type(outtype_steering)                                :: steering
     type(paramstype_siml_biomee)                          :: params_siml
     type(spec_data_type), dimension(:), allocatable       :: params_species
     type(paramstype_tile)                                 :: params_tile
     type(inittype_cohort), dimension(:), allocatable      :: init_cohort
     type(inittype_soil)                                   :: init_soil
-    integer                                               :: datalines
+    type(site_info_type)                                  :: site_info
     integer                                               :: steps_per_day
     real                                                  :: dt_fast_yr
     real                                                  :: step_seconds
   end type interfacetype_biosphere
 
   ! Data structure containing the parameters and forcing data.
-  ! Should not be mutated (it is now for historical reasons)
+  ! Should not be mutated (it is the case now for historical reasons)
   type(interfacetype_biosphere) :: myinterface
 
   !----------------------------------------------------------------
   ! Return variable of biosphere()
   !----------------------------------------------------------------
-  ! This is the derived type-return variable of the function biosphere(),
-  ! holding variables used for the cost function in sofun_calib.f90
-  type outtype_hourly_tile ! corresponds to file fno1
-    real :: year
-    real :: doy
-    real :: hour
-    real :: rad
-    real :: Tair
-    real :: Prcp
-    real :: GPP
-    real :: Resp
-    real :: Transp
-    real :: Evap
-    real :: Runoff
-    real :: Soilwater
-    real :: wcl
-    real :: FLDCAP
-    real :: WILTPT
-  end type outtype_hourly_tile
 
   type outtype_daily_tile   !fno4
     real :: year 
@@ -217,37 +199,7 @@ module md_interface_biomee
     real :: slowSoilN
     real :: mineralN
     real :: N_uptk
-  end type outtype_daily_tile  
-
-  type outtype_daily_cohorts !fno3
-    real :: year
-    real :: doy
-    real :: hour
-    real :: cID
-    real :: PFT
-    real :: layer
-    real :: density
-    real :: f_layer
-    real :: LAI
-    real :: gpp
-    real :: resp
-    real :: transp
-    real :: NPPleaf
-    real :: NPProot
-    real :: NPPwood    
-    real :: NSC
-    real :: seedC
-    real :: leafC
-    real :: rootC
-    real :: SW_C
-    real :: HW_C
-    real :: NSN
-    real :: seedN
-    real :: leafN
-    real :: rootN
-    real :: SW_N
-    real :: HW_N
-  end type outtype_daily_cohorts
+  end type outtype_daily_tile
 
   type outtype_annual_tile  !fno5
     real :: year
@@ -309,7 +261,7 @@ module md_interface_biomee
     real :: c_deadtrees
     real :: m_turnover
     real :: c_turnover_time
-  end type outtype_annual_tile  
+  end type outtype_annual_tile
 
   type outtype_annual_cohorts ! fno2
     real :: year
@@ -347,14 +299,6 @@ module md_interface_biomee
     real :: c_deadtrees
     real :: deathrate
   end type outtype_annual_cohorts
-
-  ! type outtype_biosphere
-  !   ! type(outtype_hourly_tile), dimension(:), allocatable            :: hourly_tile      !fn01
-  !   type(outtype_daily_tile), dimension(ndayyear)                     :: daily_tile       !fno4
-  !   type(outtype_daily_cohorts), dimension(ndayyear,out_max_cohorts)  :: daily_cohorts    !fno3
-  !   type(outtype_annual_tile)                                         :: annual_tile      !fno5
-  !   type(outtype_annual_cohorts), dimension(out_max_cohorts)          :: annual_cohorts   !fno2
-  ! end type outtype_biosphere
 
 contains
 

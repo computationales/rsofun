@@ -8,21 +8,21 @@ module md_classdefs
   ! - organic material, consisting of carbon and nitrogen (inherits
   !   their defitions).
   !----------------------------------------------------------------
-  use md_params_core
+  use md_params_core, only: eps
 
   implicit none
 
   private
-  public carbon, nitrogen, orgpool, orgcp, orgcpRec, orgsub, orgmv, &
+
+  ! Public types
+  public carbon, nitrogen, orgpool, common_fluxes
+
+  ! Public functions
+  public orgcp, orgcpRec, orgsub, orgmv, &
     orgmvRec, orginit, cmv, cmvRec, ccp, ccpRec, csub, cinit, nmv,  &
     nmvRec, ncp, ncpRec, nsub, ninit, orgfrac, cfrac, nfrac, orgplus, &
-    cplus, nplus, orgminus, cminus, nminus, cton, ntoc
+    cplus, nplus, orgminus, cminus, nminus, cton, ntoc, update_fluxes
 
-  ! ! Minimum precision
-  ! real, parameter :: epsilon = 1.0e-5 
-
-  ! additional checks
-  logical, parameter :: check_sanity = .false.
 
   ! Carbon, so far contains only c12 (to be extended for c13)
   type carbon
@@ -39,10 +39,32 @@ module md_classdefs
    type(nitrogen) :: n
   end type orgpool
 
+  type :: common_fluxes
+    ! Note: the unit depends on the context
+    real    :: Trsp          = 0.0
+    real    :: GPP           = 0.0
+    real    :: NPP           = 0.0
+    real    :: Resp          = 0.0
+    real    :: Nup           = 0.0
+    real    :: fixedN        = 0.0
+  end type common_fluxes
 
 contains
 !=========================LOW-LEVEL================================
 
+  subroutine update_fluxes(fluxes, delta)
+    ! Add delta quantities to partial fluxes (accounting)
+    type(common_fluxes), intent(inout) :: fluxes
+    type(common_fluxes), intent(in) :: delta
+
+    fluxes%Trsp   = fluxes%Trsp   + delta%Trsp
+    fluxes%GPP    = fluxes%GPP    + delta%GPP
+    fluxes%NPP    = fluxes%NPP    + delta%NPP
+    fluxes%Resp   = fluxes%Resp   + delta%Resp
+    fluxes%Nup    = fluxes%Nup    + delta%Nup
+    fluxes%fixedN = fluxes%fixedN + delta%fixedN
+
+  end subroutine update_fluxes
 
 !--------------------------ORGANIC---------------------------------
 
@@ -54,7 +76,6 @@ contains
     type(orgpool), intent(in) :: amount
     type(orgpool), intent(inout) :: to
     real, optional, intent(in) :: scale
-    !real, optional, intent(in) :: d13C
 
     if ( present( scale ) ) then
       call ccp( amount%c,to%c, scale )
@@ -63,14 +84,6 @@ contains
       call ccp( amount%c,to%c )
       call ncp( amount%n,to%n )
     end if
-
-    ! if (present(d13C)) then
-    !   to%c%c12 = amount%c%c12 + to%c%c12
-    !   to%n%n14 = amount%n%n14 + to%n%n14
-    ! else
-    !   to%c%c12 = amount%c%c12 + to%c%c12
-    !   to%n%n14 = amount%n%n14 + to%n%n14
-    ! end if
 
   end subroutine orgcp
 
@@ -85,7 +98,6 @@ contains
     type(orgpool), intent(inout) :: to
     real, intent(inout) :: outc
     real, intent(inout) :: outn
-    ! real, optional, intent(in) :: d13C
 
     outc = outc + amount%c%c12
     outn = outn + amount%n%n14
@@ -103,22 +115,6 @@ contains
     !----------------------------------------------------------------
     type(orgpool), intent(in) :: amount
     type(orgpool), intent(inout) :: from
-
-    ! print*, 'ORGSUB'
-    ! print*,'amount ', amount
-    ! print*,'from   ', from  
-
-    ! if (check_sanity) then
-    !   if ( amount%c%c12>from%c%c12+epsilon) then
-    !     stop 'in ORGSUB: attempting to remove C amount > from-pool'
-    !   else if ( amount%n%n14>from%n%n14+epsilon) then
-    !     stop 'in ORGSUB: attempting to remove N amount > from-pool'
-    !   else if (from%c%c12<0.0) then
-    !     stop 'in ORGSUB: C in from-pool negative'
-    !   else if (from%n%n14<0.0) then
-    !     stop 'in ORGSUB: N in from-pool negative'
-    !   end if
-    ! end if
 
     call csub( amount%c,from%c)
     call nsub( amount%n,from%n)
@@ -250,21 +246,12 @@ contains
     type(carbon), intent(in) :: amount
     type(carbon), intent(inout) :: to
     real, optional, intent(in) :: scale
-    !real, optional, intent(in) :: d13C
 
     if ( present( scale ) ) then
       to%c12 = to%c12 + amount%c12 * scale
     else
       to%c12 = to%c12 + amount%c12 
     end if
-
-    ! if (present(d13C)) then
-    !   to%c%c12 = amount%c%c12 + to%c%c12
-    !   to%n%n14 = amount%n%n14 + to%n%n14
-    ! else
-    !   to%c%c12 = amount%c%c12 + to%c%c12
-    !   to%n%n14 = amount%n%n14 + to%n%n14
-    ! end if
 
   end subroutine ccp
 
@@ -277,18 +264,9 @@ contains
     type(carbon), intent(in) :: amount
     type(carbon), intent(inout) :: to
     real, intent(inout) :: outc
-    ! real, optional, intent(in) :: d13C
 
     to%c12 = amount%c12 + to%c12
     outc = outc + amount%c12
-
-    ! if (present(d13C)) then
-    !   to%c%c12 = amount%c%c12 + to%c%c12
-    !   to%n%n14 = amount%n%n14 + to%n%n14
-    ! else
-    !   to%c%c12 = amount%c%c12 + to%c%c12
-    !   to%n%n14 = amount%n%n14 + to%n%n14
-    ! end if
 
   end subroutine ccpRec
 
@@ -300,16 +278,6 @@ contains
     !----------------------------------------------------------------
     type(carbon), intent(in) :: amount
     type(carbon), intent(inout) :: from
-
-
-    !if (check_sanity) then
-    !  if ( amount%c12 > from%c12+epsilon) then
-    !    write(0,*) 'amount', amount%c12
-    !    write(0,*) 'from  ', from%c12
-    !    write(0,*) 'in CSUB: attempting to remove amount > from-pool'
-    !    stop
-    !  end if
-    !end if
     
     from%c12 = from%c12 - amount%c12
      
@@ -418,13 +386,6 @@ contains
     !----------------------------------------------------------------
     type(nitrogen), intent(in) :: amount
     type(nitrogen), intent(inout) :: from
-
-
-    ! if (check_sanity) then
-    !   if ( amount%n14>from%n14+epsilon) then
-    !     stop 'in NSUB: attempting to remove amount > from-pool'
-    !   end if
-    ! end if
     
     from%n14 = from%n14 - amount%n14
 
@@ -734,15 +695,6 @@ contains
         out_cton = pool%c%c12 / pool%n%n14
       end if
     else
-
-    ! if (check_sanity) then
-    !   if (pool%n%n14==0.) then
-    !     stop 'in CTON: N is zero'
-    !   end if
-    !   if (pool%n%n14<0.0 .or. pool%c%c12<0.0) then
-    !     stop 'in CTON: C and/or N is negative'
-    !   end if
-    ! end if
     
     out_cton = pool%c%c12 / pool%n%n14
     
@@ -770,15 +722,6 @@ contains
         out_ntoc = pool%n%n14 / pool%c%c12
       end if
     else
-
-    ! if (check_sanity) then
-    !   if (pool%c%c12==0.) then
-    !     stop 'in NTOC: C is zero'
-    !   end if
-    !   if (pool%n%n14<0.0 .or. pool%c%c12<0.0) then
-    !     stop 'in NTOC: C and/or N is negative'
-    !   end if
-    ! end if
     
     out_ntoc = pool%n%n14 / pool%c%c12
     

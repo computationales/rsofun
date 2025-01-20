@@ -4,7 +4,7 @@
 \alias{runread_biomee_f}
 \title{Run BiomeE}
 \usage{
-runread_biomee_f(drivers, makecheck = TRUE, parallel = FALSE, ncores = 2)
+runread_biomee_f(drivers, makecheck = TRUE, parallel = FALSE, ncores = 1)
 }
 \arguments{
 \item{drivers}{A nested data frame with one row for each site and columns
@@ -14,12 +14,10 @@ Namely \code{sitename, params_siml, site_info} and \code{forcing}.}
 \item{makecheck}{A logical specifying whether checks are performed 
 to verify forcings and model parameters. \code{TRUE} by default.}
 
-\item{parallel}{Flag specifying whether simulations are to be
-parallelised (sending data from a certain number of sites to each core). 
-Defaults to \code{FALSE}.}
+\item{parallel}{Deprecated. Use ncores instead.}
 
 \item{ncores}{An integer specifying the number of cores used for parallel 
-computing. Defaults to 2.}
+computing (sites processed in parallel). Default: 1 (no parallel execution).}
 }
 \value{
 A data frame (tibble) with one row for each site, site information 

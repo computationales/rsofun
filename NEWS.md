@@ -2,8 +2,12 @@
 
 * new BiomeE behavior to recycle last year of forcing if requested simulation time span (`nyeartrend`) is longer than 
 available forcing data
-* Breaking change: biomee drivers' `init_cohort$init_n_cohorts` column has been phased out and must not be present in  
+* Breaking changes in biomee drivers
+  * `init_cohort$init_n_cohorts` column has been phased out and must not be present in  
 drivers to protect against data corruption.
+  * `update_annualLAImax` flag was removed and the behavior is now slightly altered since `LAImax` and `underLAImax` are set and kept constant at the start of the simulation:
+    * `LAImax` takes value `max(LAI_light, 0.5)`
+    * `underLAImax` takes value `min(LAImax, 1.2)`
 
 # rsofun v5.0.0
 

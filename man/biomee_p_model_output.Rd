@@ -11,8 +11,7 @@ An object of class \code{tbl_df} (inherits from \code{tbl}, \code{data.frame}) w
 biomee_p_model_output
 }
 \description{
-Example output dataset from a BiomeE-model run (p-model)
-See \code{\link{run_biomee_f_bysite}} for a detailed 
-description of the outputs.
+Example output dataset from a BiomeE-model run using divers \code{\link{biomee_p_model_drivers}}
+See \code{\link{run_biomee_f_bysite}} for a detailed description of the outputs.
 }
 \keyword{datasets}

@@ -5,7 +5,7 @@ module md_gpp_biomee
   ! Code for gs_leuning photosynthesis option is adopted from BiomeE https://doi.org/10.5281/zenodo.7125963.
   ! Code for pmodel photosynthesis option is for P-model (Stocker et al., 2020 GMD)
   !----------------------------------------------------------------
-  use datatypes
+  use datatypes_biomee
   use md_interface_biomee, only: myinterface
   use md_soil_biomee, only: water_supply_layer
   use md_sofunutils, only: calc_esat
@@ -37,7 +37,7 @@ module md_gpp_biomee
 
 contains
 
-  subroutine gpp( forcing, vegn, init )
+  subroutine gpp( forcing, vegn )
     !//////////////////////////////////////////////////////////////////////
     ! GPP
     ! Calculates light availability and photosynthesis for each cohort 
@@ -58,11 +58,11 @@ contains
 
     type(climate_type), intent(in):: forcing
     type(vegn_tile_type), intent(inout) :: vegn
-    logical, intent(in) :: init   ! is true on the very first simulation day (first subroutine call of each gridcell)
 
     ! local variables used for BiomeE-Allocation part
     type(cohort_type), pointer :: cc
-    integer, parameter :: nlayers_max = 9                  ! maximum number of canopy layers to be considered 
+    type(cohort_item), pointer :: it
+    integer :: i
     real   :: rad_top                                      ! downward radiation at the top of the canopy, W/m2
     real   :: rad_net                                      ! net radiation absorbed by the canopy, W/m2
     real   :: Tair, TairK                                  ! air temperature, degC and degK
@@ -74,46 +74,40 @@ contains
     real   :: psyn                                         ! net photosynthesis, mol C/(m2 of leaves s)
     real   :: resp                                         ! leaf respiration, mol C/(m2 of leaves s)
     real   :: w_scale2, transp                             ! mol H20 per m2 of leaf per second
-    real   :: kappa                                        ! light extinction coefficient of crown layers
     real   :: f_light(nlayers_max+1)                       ! incident light fraction at top of a given layer
     real   :: LAIlayer(nlayers_max)                        ! leaf area index per layer, corrected for gaps (representative for the tree-covered fraction)
-    real   :: accuCAI, f_gap
+    real   :: accuCAI
     real   :: par                                          ! just for temporary use
-    real, dimension(vegn%n_cohorts) :: fapar_tree          ! tree-level fAPAR based on LAI within the crown
+    real, allocatable :: fapar_tree(:)                     ! tree-level fAPAR based on LAI within the crown
     real, dimension(nlayers_max-1) :: fapar_layer
-
-    integer:: i, layer=0
+    real, parameter :: kappa = 0.5                         ! light extinction coefficient of crown layers
+    real, parameter :: f_gap = 0.1
 
     ! local variables used for P-model part
-    real :: tk, kphio_temp
-    real, save :: co2_memory
-    real, save :: vpd_memory
-    real, save :: temp_memory
-    real, save :: patm_memory
-    real, dimension(nlayers_max), save :: par_memory
+    real :: kphio_temp
     type(outtype_pmodel) :: out_pmodel      ! list of P-model output variables
+
+    allocate(fapar_tree(vegn%n_cohorts())) ! no need to deallocate
+    fapar_layer(:) = 0.0
+    LAIlayer(:) = 0.0
 
     !-----------------------------------------------------------
     ! Canopy light absorption
     !-----------------------------------------------------------
     ! ! Calculate kappa according to sun zenith angle 
-    ! kappa = cc%extinct/max(cosz,0.01)
-    
-    ! Use constant light extinction coefficient
-    kappa = 0.5         !cc%extinct
+    ! kappa = extinct/max(cosz,0.01)
 
     ! Sum leaf area over cohorts in each crown layer -> LAIlayer(layer)
-    f_gap = 0.1 ! 0.1
-    accuCAI = 0.0
-    LAIlayer(:) = 0.0
-    fapar_layer(:) = 0.0
-    do i = 1, vegn%n_cohorts
-      cc => vegn%cohorts(i)
-      layer = Max(1, Min(cc%layer, nlayers_max))
-      LAIlayer(layer) = LAIlayer(layer) + cc%leafarea * cc%nindivs / (1.0 - f_gap)
+    i = 0
+    it => vegn%heap
+    do while (associated(it))
+      cc => it%cohort
+      i = i + 1
+      LAIlayer(cc%layer) = LAIlayer(cc%layer) + cc%leafarea * cc%nindivs / (1.0 - f_gap)
       fapar_tree(i) = 1.0 - exp(-kappa * cc%leafarea / cc%crownarea)   ! at individual-level: cc%leafarea represents leaf area index within the crown
-      fapar_layer(layer) = fapar_layer(layer) + fapar_tree(i) * cc%crownarea * cc%nindivs
-    enddo
+      fapar_layer(cc%layer) = fapar_layer(cc%layer) + fapar_tree(i) * cc%crownarea * cc%nindivs
+      it => it%next
+    end do
 
     ! Get light received at each crown layer as a fraction of top-of-canopy -> f_light(layer) 
     f_light(:) = 0.0
@@ -135,21 +129,21 @@ contains
       ! Photosynthesis
       accuCAI = 0.0
 
-      cohortsloop_leuning: do i = 1, vegn%n_cohorts
+      it => vegn%heap
+      do while (associated(it))
 
-        cc => vegn%cohorts(i)
-        associate ( sp => myinterface%params_species(cc%species) )
+        cc => it%cohort
+        associate ( sp => cc%sp() )
 
         if (cc%status == LEAF_ON) then   !.and. cc%lai > 0.1
 
           ! Convert forcing data
-          layer    = Max (1, Min(cc%layer, nlayers_max))
-          rad_top  = f_light(layer) * forcing%radiation ! downward radiation at the top of the canopy, W/m2
+          rad_top  = f_light(cc%layer) * forcing%radiation ! downward radiation at the top of the canopy, W/m2
 
           !===============================
           ! ORIGINAL
           !===============================
-          rad_net  = f_light(layer) * forcing%radiation * 0.9 ! net radiation absorbed by the canopy, W/m2
+          rad_net  = f_light(cc%layer) * forcing%radiation * 0.9 ! net radiation absorbed by the canopy, W/m2
           p_surf   = forcing%P_air  ! Pa
           TairK    = forcing%Tair ! K
           Tair     = forcing%Tair - 273.16 ! degC
@@ -157,45 +151,37 @@ contains
           cana_co2 = forcing%CO2 ! co2 concentration in canopy air space, mol CO2/mol dry air
 
           ! recalculate the water supply to mol H20 per m2 of leaf per second
-          water_supply = cc%W_supply / (cc%leafarea * myinterface%step_seconds * h2o_molmass * 1e-3) ! mol m-2 leafarea s-1
+          water_supply = cc%W_supply() / (cc%leafarea * myinterface%step_seconds * h2o_molmass * 1e-3) ! mol m-2 leafarea s-1
 
           !call get_vegn_wet_frac (cohort, fw=fw, fs=fs)
           fw = 0.0
           fs = 0.0
 
-          call gs_leuning(rad_top, rad_net, TairK, cana_q, cc%lai, &
+          call gs_leuning(rad_top, rad_net, TairK, cana_q, cc%lai(), &
             p_surf, water_supply, cc%species, sp%pt, &
-            cana_co2, cc%extinct, fs+fw, &
+            cana_co2, extinct, fs+fw, &
             psyn, resp, w_scale2, transp )
-
-          !===============================
-          ! XXX Experiment: increasing net photosynthesis 15% and 30%
-          !===============================
-          ! if (myinterface%steering%year>myinterface%params_siml%spinupyears) then
-          !   psyn = psyn * 1.30
-          !   resp = resp * 1.30
-          ! endif
 
           ! store the calculated photosynthesis, photorespiration, and transpiration for future use in growth
           cc%An_op   = psyn   ! molC s-1 m-2 of leaves ! net photosynthesis, mol C/(m2 of leaves s)
           cc%An_cl   = -resp  ! molC s-1 m-2 of leaves
-          cc%w_scale = w_scale2
-          cc%transp  = transp * h2o_molmass * 1e-3 * cc%leafarea * myinterface%step_seconds      ! Transpiration (kgH2O/(tree step), Weng, 2017-10-16
-          cc%resl    = -resp         * c_molmass * 1e-3 * cc%leafarea * myinterface%step_seconds ! kgC tree-1 step-1
-          cc%gpp     = (psyn - resp) * c_molmass * 1e-3 * cc%leafarea * myinterface%step_seconds ! kgC step-1 tree-1
+          cc%fast_fluxes%trsp = transp * h2o_molmass * 1e-3 * cc%leafarea * myinterface%step_seconds      ! Transpiration (kgH2O/(tree step), Weng, 2017-10-16
+          cc%resl = -resp * c_molmass * 1e-3 * cc%leafarea * myinterface%step_seconds ! kgC tree-1 step-1
+          cc%fast_fluxes%gpp = (psyn - resp) * c_molmass * 1e-3 * cc%leafarea * myinterface%step_seconds ! kgC step-1 tree-1
 
           else
 
           ! no leaves means no photosynthesis and no stomatal conductance either
             cc%An_op   = 0.0
             cc%An_cl   = 0.0
-            cc%gpp     = 0.0
-            cc%transp  = 0.0
-            cc%w_scale = -9999
+            cc%fast_fluxes%gpp   = 0.0
+            cc%fast_fluxes%trsp  = 0.0
 
           endif
         end associate
-      enddo cohortsloop_leuning
+
+        it => it%next
+      end do
 
     else if (trim(myinterface%params_siml%method_photosynth) == "pmodel") then
       !===========================================================
@@ -204,52 +190,49 @@ contains
       ! Calculate environmental conditions with memory, time scale 
       ! relevant for Rubisco turnover
       !----------------------------------------------------------------
-      if (init) then
-        co2_memory  = forcing%CO2 * 1.0e6
-        temp_memory = (forcing%Tair - kTkelvin)
-        vpd_memory  = forcing%vpd
-        patm_memory = forcing%P_air
-        par_memory = -1.0 ! We initialize par_memory to a dummy value used to detect the need for initialization,
-        ! as the initialization process using init flags is error prone given the dunmaic the adjuction of layers.
-      end if 
-      
-      co2_memory  = dampen_variability( forcing%CO2 * 1.0e6,        params_gpp%tau_acclim, co2_memory )
-      temp_memory = dampen_variability( (forcing%Tair - kTkelvin),  params_gpp%tau_acclim, temp_memory)
-      vpd_memory  = dampen_variability( forcing%vpd,                params_gpp%tau_acclim, vpd_memory )
-      patm_memory = dampen_variability( forcing%P_air,              params_gpp%tau_acclim, patm_memory )
+      if (.not. vegn%dampended_forcing%initialized) then
+        vegn%dampended_forcing%co2  = forcing%CO2 * 1.0e6
+        vegn%dampended_forcing%temp = (forcing%Tair - kTkelvin)
+        vegn%dampended_forcing%vpd  = forcing%vpd
+        vegn%dampended_forcing%patm = forcing%P_air
+        vegn%dampended_forcing%par = forcing%radiation
+        vegn%dampended_forcing%initialized = .True.
+      else
+        vegn%dampended_forcing%co2  = dampen_variability( forcing%CO2 * 1.0e6,        params_gpp%tau_acclim, &
+                vegn%dampended_forcing%co2 )
+        vegn%dampended_forcing%temp = dampen_variability( (forcing%Tair - kTkelvin),  params_gpp%tau_acclim, &
+                vegn%dampended_forcing%temp)
+        vegn%dampended_forcing%vpd  = dampen_variability( forcing%vpd,                &
+                params_gpp%tau_acclim, vegn%dampended_forcing%vpd )
+        vegn%dampended_forcing%patm = dampen_variability( forcing%P_air,              &
+                params_gpp%tau_acclim, vegn%dampended_forcing%patm )
+        vegn%dampended_forcing%par = dampen_variability( forcing%radiation,              &
+                params_gpp%tau_acclim, vegn%dampended_forcing%par )
+      end if
 
-      tk = forcing%Tair + kTkelvin
+      !----------------------------------------------------------------
+      ! Instantaneous temperature effect on quantum yield efficiency
+      !----------------------------------------------------------------
+      kphio_temp = calc_kphio_temp( (forcing%Tair - kTkelvin), &
+              .false., &    ! no C4
+              params_gpp%kphio, &
+              params_gpp%kphio_par_a, &
+              params_gpp%kphio_par_b )
 
       !----------------------------------------------------------------
       ! Photosynthesis for each cohort
       !----------------------------------------------------------------
-      cohortsloop_pmodel: do i = 1, vegn%n_cohorts
+      i = 0
+      it => vegn%heap
+      do while (associated(it))
 
-        cc => vegn%cohorts(i)
-        associate ( sp => myinterface%params_species(cc%species) )
-
-        ! get canopy layer of this cohort
-        layer = max(1, min(cc%layer, nlayers_max))
-
-        !----------------------------------------------------------------
-        ! Instantaneous temperature effect on quantum yield efficiency
-        !----------------------------------------------------------------
-        kphio_temp = calc_kphio_temp( (forcing%Tair - kTkelvin), &
-                .false., &    ! no C4
-                params_gpp%kphio, &
-                params_gpp%kphio_par_a, &
-                params_gpp%kphio_par_b )
-
-        ! photosynthetically active radiation level at this layer
-        par = f_light(layer) * forcing%radiation * kfFEC * 1.0e-6
-        ! slowly varying light conditions per layer, relevant for acclimation (P-model quantities)
-        if (par_memory(layer) <= -1.0) then
-          par_memory(layer) = par
-        else
-          par_memory(layer) = dampen_variability(par, params_gpp%tau_acclim, par_memory(layer))
-        end if
+        cc => it%cohort
+        i = i + 1
 
         if (cc%status == LEAF_ON) then
+
+          ! photosynthetically active radiation level at this layer
+          par = f_light(cc%layer) * vegn%dampended_forcing%par * kfFEC * 1.0e-6
 
           !----------------------------------------------------------------
           ! P-model call for C3 plants to get a list of variables that are 
@@ -259,11 +242,11 @@ contains
                                 kphio          = kphio_temp, &
                                 beta           = params_gpp%beta, &
                                 kc_jmax        = params_gpp%kc_jmax, &
-                                ppfd           = par_memory(layer), &
-                                co2            = co2_memory, &
-                                tc             = temp_memory, &
-                                vpd            = vpd_memory, &
-                                patm           = patm_memory, &
+                                ppfd           = par, &
+                                co2            = vegn%dampended_forcing%co2, &
+                                tc             = vegn%dampended_forcing%temp, &
+                                vpd            = vegn%dampended_forcing%vpd, &
+                                patm           = vegn%dampended_forcing%patm, &
                                 c4             = .false., &
                                 method_optci   = "prentice14", &
                                 method_jmaxlim = "wang17" &
@@ -272,11 +255,10 @@ contains
           ! irrelevant variables for this setup  
           cc%An_op   = 0.0
           cc%An_cl   = 0.0
-          cc%transp  = 0.0
-          cc%w_scale = -9999            
+          cc%fast_fluxes%trsp  = 0.0
 
           ! quantities per tree and cumulated over seconds in time step (kgC step-1 tree-1 )
-          cc%gpp = par * fapar_tree(i) * out_pmodel%lue * cc%crownarea * myinterface%step_seconds * 1.0e-3
+          cc%fast_fluxes%gpp = par * fapar_tree(i) * out_pmodel%lue * cc%crownarea * myinterface%step_seconds * 1.0e-3
           cc%resl = fapar_tree(i) * out_pmodel%vcmax25 * params_gpp%rd_to_vcmax * calc_ftemp_inst_rd( forcing%Tair - kTkelvin ) &
             * cc%crownarea * myinterface%step_seconds * c_molmass * 1.0e-3
 
@@ -285,16 +267,14 @@ contains
           ! no leaves means no photosynthesis and no stomatal conductance either
           cc%An_op   = 0.0
           cc%An_cl   = 0.0
-          cc%transp  = 0.0
-          cc%w_scale = -9999
           cc%resl    = 0.0
-          cc%gpp     = 0.0
+          cc%fast_fluxes%gpp   = 0.0
+          cc%fast_fluxes%trsp  = 0.0
 
         endif
 
-        end associate
-
-      end do cohortsloop_pmodel
+        it => it%next
+      end do
 
     end if
 
@@ -328,7 +308,7 @@ contains
     !real,    intent(out)   :: gs   ! stomatal conductance, m/s
     real,    intent(out)   :: apot ! net photosynthesis, mol C/(m2 s)
     real,    intent(out)   :: acl  ! leaf respiration, mol C/(m2 s)
-    real,    intent(out)   :: w_scale2,transp  ! transpiration, mol H20/(m2 of leaf s)
+    real,    intent(out)   :: w_scale2, transp  ! transpiration, mol H20/(m2 of leaf s)
     
     ! local variables     
     ! photosynthesis

@@ -1027,37 +1027,6 @@ contains
 
   end function calc_ftemp_arrhenius
 
-  ! XXX REMOVED BECAUSE IT'S NOW IN SOFUNUTILS
-  ! function calc_patm( elv ) result( patm )
-  !   !-----------------------------------------------------------------------
-  !   ! Features: Returns the atmospheric pressure as a function of elevation
-  !   !           and standard atmosphere (1013.25 hPa)
-  !   ! Depends:  - connect_sql
-  !   !           - flux_to_grid
-  !   !           - get_data_point
-  !   !           - get_msvidx
-  !   ! Ref:      Allen et al. (1998)
-  !   !-----------------------------------------------------------------------
-  !   ! argument
-  !   real, intent(in) :: elv           ! elevation above sea level, m
-
-  !   ! local variables
-  !   real, parameter :: kPo = 101325   ! standard atmosphere, Pa (Allen, 1973)
-  !   real, parameter :: kTo = 298.15   ! base temperature, K (Prentice, unpublished)
-  !   real, parameter :: kL  = 0.0065   ! temperature lapse rate, K/m (Allen, 1973)
-  !   real, parameter :: kG  = 9.80665  ! gravitational acceleration, m/s**2 (Allen, 1973)
-  !   real, parameter :: kR  = 8.3145   ! universal gas constant, J/mol/K (Allen, 1973)
-  !   real, parameter :: kMa = 0.028963 ! molecular weight of dry air, kg/mol (Tsilingiris, 2008)
-
-  !   ! function return variable
-  !   real :: patm    ! atmospheric pressure at elevation 'elv', Pa 
-
-  !   ! Convert elevation to pressure, Pa:
-  !   patm = kPo*(1.0 - kL*elv/kTo)**(kG*kMa/(kR*kL))
-    
-  ! end function calc_patm
-
-
   function calc_density_h2o( tc, patm ) result( density_h2o )
     !-----------------------------------------------------------------------
     ! Features: Calculates density of water at a given temperature and 

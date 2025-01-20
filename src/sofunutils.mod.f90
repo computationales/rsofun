@@ -13,7 +13,7 @@ contains
     ! Calculates the updated variable accounting for a memory time scale tau.
     ! Following Eq. 5 in Makela et al. (2004) Tree Physiology 24, 369–376
     ! 
-    ! d(var_memory) / dt = (1 / tau) * var - var_memory
+    ! d(var_memory) / dt = (1 / tau) * (var - var_memory)
     ! 
     !-------------------------------------------------------------------------
     ! arguments
